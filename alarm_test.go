@@ -57,7 +57,7 @@ func TestButtons(t *testing.T) {
 			expectedLowBeeps:  4,
 			expectedMedBeeps:  1,
 			expectedBuffer:    "",
-			expectedState:     Armed,
+			expectedState:     Arming,
 		},
 		{
 			name:              "pressing C empties the buffer",
@@ -179,6 +179,12 @@ func TestDoorOpened(t *testing.T) {
 
 func TestAlarmCodeChange(t *testing.T) {
 	alarm := New("1234")
+	for _, k := range "B4321B4321#" {
+		alarm.KeyPressed(string(k))
+	}
+	if alarm.Code != "1234" {
+		t.Errorf("should not possible to change the code without entering the correct code first")
+	}
 	for _, k := range "B1234B4321#" {
 		alarm.KeyPressed(string(k))
 	}

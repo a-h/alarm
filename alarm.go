@@ -36,8 +36,11 @@ func New(code string) *Alarm {
 		StopAlarm:  func() {},
 		Logger:     func(format string, v ...interface{}) {},
 	}
-	a.Timeout = func() {
+	a.Timeout = func(ctx context.Context) {
 		for i := 0; i < 10; i++ {
+			if ctx.Err() == context.Canceled {
+				return
+			}
 			a.MediumBeep()
 			time.Sleep(time.Second)
 		}
@@ -66,7 +69,7 @@ type Alarm struct {
 	cancellations []func()
 
 	// Default timer.
-	Timeout func()
+	Timeout func(ctx context.Context)
 
 	Logger func(format string, v ...interface{})
 }
@@ -98,7 +101,7 @@ func (a *Alarm) KeyPressed(key string) {
 	}
 }
 
-var alarmChangeRegexp = regexp.MustCompile(`B\d+B(\d+)#`)
+var alarmChangeRegexp = regexp.MustCompile(`B(\d+)B(\d+)#`)
 
 func (a *Alarm) executeCommand() {
 	// Examine the buffer for correct values.
@@ -106,14 +109,19 @@ func (a *Alarm) executeCommand() {
 		// Arm the alarm.
 		if a.Buffer == "A"+a.Code+"#" {
 			a.Logger("Arming the alarm")
-			//TODO: This should actually transition to arming and have a timeout.
-			a.Arm()
+			a.Arming()
 		}
 		return
 	}
 	if alarmChangeRegexp.MatchString(a.Buffer) && a.State == Disarmed {
-		//TODO: Check that the codes match correct.
-		a.Code = alarmChangeRegexp.FindStringSubmatch(a.Buffer)[1]
+		m := alarmChangeRegexp.FindStringSubmatch(a.Buffer)
+		firstCode := m[1]
+		if firstCode != a.Code {
+			a.Logger("The entered code %v was not correct", firstCode)
+			return
+		}
+		secondCode := m[2]
+		a.Code = secondCode
 		a.Logger("Changed the alarm code to %v", a.Code)
 		return
 	}
@@ -143,21 +151,42 @@ func (a *Alarm) Disarm() {
 
 // Arm the alarm.
 func (a *Alarm) Arm() {
+	a.Logger("Armed")
 	a.State = Armed
+}
+
+// Arming starts the arming process.
+func (a *Alarm) Arming() {
+	if a.State != Disarmed {
+		a.Logger("Attempted to arm while state was not disarmed, current state is %v", a.State)
+		return
+	}
+	a.State = Arming
+	ctx, cancel := context.WithCancel(context.Background())
+	a.cancellations = append(a.cancellations, cancel)
+	go func() {
+		a.Timeout(ctx)
+		if ctx.Err() == context.Canceled {
+			a.Logger("Alarm arming cancelled")
+			return
+		}
+		a.Arm()
+	}()
+	return
 }
 
 // Triggering the alarm.
 func (a *Alarm) Triggering() {
+	a.Logger("Triggering alarm")
 	a.State = Triggering
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancellations = append(a.cancellations, cancel)
 	go func() {
-		a.Timeout()
+		a.Timeout(ctx)
 		if ctx.Err() == context.Canceled {
 			a.Logger("Alarm triggering cancelled")
 			return
 		}
-		a.Logger("Triggering alarm")
 		a.Trigger()
 	}()
 	return
@@ -165,6 +194,7 @@ func (a *Alarm) Triggering() {
 
 // Trigger the alarm.
 func (a *Alarm) Trigger() {
+	a.Logger("Alarm triggered")
 	a.State = Triggered
 	a.StartAlarm()
 }
@@ -206,6 +236,7 @@ func (a *Alarm) SetDoorIsOpen(open bool) {
 	}
 	a.doorIsOpen = open
 	if a.State == Armed && a.doorIsOpen {
+		a.Logger("Triggering alarm due to door open")
 		a.Triggering()
 	}
 	return

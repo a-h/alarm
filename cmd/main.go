@@ -65,6 +65,9 @@ func main() {
 	// Configure logging.
 	a.Logger = log.Printf
 
+	// Configure the reed switch.
+	s := Debounce(rpio.Pin(21))
+
 	log.Printf("Alarm state: %v", a.State)
 	for {
 		if keys, ok := pad.Read(); ok {
@@ -73,8 +76,8 @@ func main() {
 				a.KeyPressed(k)
 			}
 		}
-		//TODO: Connect the door switch.
-		// a.SetDoorIsOpen()
+		doorIsOpen := s() == rpio.Low
+		a.SetDoorIsOpen(doorIsOpen)
 	}
 }
 
@@ -105,5 +108,19 @@ func (as *alarmSounder) Run() {
 			beeper.Beep(as.Pin, 2000, time.Millisecond*50)
 		}
 		time.Sleep(time.Millisecond * 150)
+	}
+}
+
+// Debounce a pin.
+func Debounce(pin rpio.Pin) func() rpio.State {
+	pin.PullDown()
+	lastChange := time.Now()
+	state := pin.Read()
+	return func() rpio.State {
+		if time.Now().Before(lastChange.Add(time.Millisecond * 10)) {
+			return state
+		}
+		state = pin.Read()
+		return state
 	}
 }
