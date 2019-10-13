@@ -59,6 +59,7 @@ type Alarm struct {
 	HighBeep   func()
 	StartAlarm func()
 	StopAlarm  func()
+
 	// Buffer of pressed keys.
 	Buffer     string
 	Failures   int
