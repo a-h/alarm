@@ -124,6 +124,9 @@ func (a *Alarm) executeCommand() {
 		secondCode := m[2]
 		a.Code = secondCode
 		a.Logger("Changed the alarm code to %v", a.Code)
+		a.LowBeep()
+		a.MediumBeep()
+		a.HighBeep()
 		return
 	}
 	if strings.HasPrefix(a.Buffer, "D"+a.Code+"#") {
