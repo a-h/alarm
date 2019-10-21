@@ -97,6 +97,9 @@ func main() {
 	// Configure logging.
 	a.Logger = log.Printf
 
+	// Configure whether to send events to the Internet.
+	netSw := Debounce(rpio.Pin(2))
+
 	// Configure the reed switch.
 	s := Debounce(rpio.Pin(21))
 	doorState, _ := s()
@@ -142,7 +145,12 @@ exit:
 				log.Printf("Door open: %v", doorState == rpio.High)
 				a.SetDoorIsOpen(doorState == rpio.High)
 				// Send a notification to the queue.
-				openNotifications <- doorState == rpio.High
+				if sw, _ := netSw(); sw == rpio.Low {
+					log.Printf("Internet switch on, sending notification.")
+					openNotifications <- doorState == rpio.High
+				} else {
+					log.Printf("Internet switch OFF, skipping notification.")
+				}
 			}
 			// Update the display.
 			if len(a.Buffer) > 4 {
