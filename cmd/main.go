@@ -107,21 +107,22 @@ func main() {
 	a.SetDoorIsOpen(doorState == rpio.High)
 
 	// Create a channel for the notifications to go to.
-	openNotifications := make(chan bool, 10)
+	eventNotifications := make(chan doorstatus.Event, 10)
 	// Send a notification to the queue.
-	openNotifications <- doorState == rpio.High
+	eventNotifications <- doorstatus.EventAlarmStarted
+	eventNotifications <- openOrClosedEvent(doorState == rpio.High)
 	go func() {
 		dsu := doorstatus.NewUpdater(*notifyFlag)
 		shouldNotify := *notifyFlag != ""
-		for isOpen := range openNotifications {
+		for e := range eventNotifications {
 			if !shouldNotify {
-				log.Printf("Skipping notification, because notify flag was not set: %v", openOrClosed(isOpen))
+				log.Printf("Skipping notification, because notify flag was not set: %v", e)
 				continue
 			}
-			log.Printf("Sending door open notification: %v", openOrClosed(isOpen))
-			err := dsu(isOpen)
+			log.Printf("Sending notification: %v", e)
+			err := dsu(e)
 			if err != nil {
-				log.Printf("Error posting to door status: %v", err)
+				log.Printf("Error posting status: %v", err)
 				continue
 			}
 			log.Print("Notification sent OK.")
@@ -129,6 +130,8 @@ func main() {
 	}()
 
 	displaying := a.Display
+	alarmState := a.State
+
 exit:
 	for {
 		select {
@@ -143,15 +146,24 @@ exit:
 				}
 			}
 			if doorState, updated := s(); updated {
-				log.Printf("Door open: %v", doorState == rpio.High)
-				a.SetDoorIsOpen(doorState == rpio.High)
+				doorIsOpen := doorState == rpio.High
+				log.Printf("Door open: %v", doorIsOpen)
+				a.SetDoorIsOpen(doorIsOpen)
 				// Send a notification to the queue.
 				if sw, _ := netSw(); sw == rpio.Low {
 					log.Printf("Internet switch ON, sending notification.")
-					openNotifications <- doorState == rpio.High
+					eventNotifications <- openOrClosedEvent(doorIsOpen)
 				} else {
 					log.Printf("Internet switch OFF, skipping notification.")
 				}
+			}
+
+			// If the state has changed, send a notification.
+			if alarmState != a.State {
+				if e, ok := stateToEvent[a.State]; ok {
+					eventNotifications <- e
+				}
+				alarmState = a.State
 			}
 
 			// Update the display.
@@ -164,7 +176,7 @@ exit:
 			disp.Render()
 		}
 	}
-	close(openNotifications)
+	close(eventNotifications)
 	log.Printf("Shutdown complete")
 }
 
@@ -175,11 +187,17 @@ func firstFourCharacters(s string) string {
 	return s
 }
 
-func openOrClosed(isOpen bool) string {
+var stateToEvent = map[alarm.State]doorstatus.Event{
+	alarm.Armed:     doorstatus.EventAlarmArmed,
+	alarm.Disarmed:  doorstatus.EventAlarmDisarmed,
+	alarm.Triggered: doorstatus.EventAlarmTriggered,
+}
+
+func openOrClosedEvent(isOpen bool) doorstatus.Event {
 	if isOpen {
-		return "open"
+		return doorstatus.EventDoorOpened
 	}
-	return "closed"
+	return doorstatus.EventDoorClosed
 }
 
 type alarmSounder struct {
