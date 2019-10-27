@@ -102,8 +102,8 @@ func TestButtons(t *testing.T) {
 			if alarm.State != test.expectedState {
 				t.Errorf("expected state: %v, got %v", test.expectedState, alarm.State)
 			}
-			if alarm.Buffer != test.expectedBuffer {
-				t.Errorf("expected buffer: %q, got %q", test.expectedBuffer, alarm.Buffer)
+			if alarm.buffer != test.expectedBuffer {
+				t.Errorf("expected buffer: %q, got %q", test.expectedBuffer, alarm.buffer)
 			}
 			if actualLowBeeps != test.expectedLowBeeps {
 				t.Errorf("expected low beeps: %d, got %d", test.expectedLowBeeps, actualLowBeeps)

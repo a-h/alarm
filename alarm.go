@@ -2,6 +2,7 @@ package alarm
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"strings"
 	"sync"
@@ -37,11 +38,12 @@ func New(code string) *Alarm {
 		Logger:     func(format string, v ...interface{}) {},
 	}
 	a.Timeout = func(ctx context.Context) {
-		for i := 0; i < 10; i++ {
+		for i := 10; i > 0; i-- {
 			if ctx.Err() == context.Canceled {
 				return
 			}
 			a.MediumBeep()
+			a.Display = fmt.Sprintf("%d", i)
 			time.Sleep(time.Second)
 		}
 	}
@@ -60,10 +62,11 @@ type Alarm struct {
 	StartAlarm func()
 	StopAlarm  func()
 
-	// Buffer of pressed keys.
-	Buffer     string
+	// buffer of pressed keys.
+	buffer     string
 	Failures   int
 	doorIsOpen bool
+	Display    string
 
 	// Used to cancel timers.
 	m             sync.Mutex
@@ -80,6 +83,7 @@ func (a *Alarm) KeyPressed(key string) {
 	if key == "*" {
 		a.MediumBeep()
 		a.backspace()
+		a.Display = a.buffer
 		return
 	}
 	if isDigit(key) {
@@ -90,15 +94,17 @@ func (a *Alarm) KeyPressed(key string) {
 	}
 	if key == "C" {
 		a.Logger("Clearing buffer")
-		a.Buffer = ""
+		a.buffer = ""
+		a.Display = a.buffer
 		return
 	}
-	a.Buffer += key
+	a.buffer += key
+	a.Display = a.buffer
 	if key == "#" {
 		a.Logger("Attempting to execute command")
 		a.MediumBeep()
 		a.executeCommand()
-		a.Buffer = ""
+		a.buffer = ""
 	}
 }
 
@@ -106,16 +112,16 @@ var alarmChangeRegexp = regexp.MustCompile(`B(\d+)B(\d+)#`)
 
 func (a *Alarm) executeCommand() {
 	// Examine the buffer for correct values.
-	if strings.HasPrefix(a.Buffer, "A") {
+	if strings.HasPrefix(a.buffer, "A") {
 		// Arm the alarm.
-		if a.Buffer == "A"+a.Code+"#" {
+		if a.buffer == "A"+a.Code+"#" {
 			a.Logger("Arming the alarm")
 			a.Arming()
 		}
 		return
 	}
-	if alarmChangeRegexp.MatchString(a.Buffer) && a.State == Disarmed {
-		m := alarmChangeRegexp.FindStringSubmatch(a.Buffer)
+	if alarmChangeRegexp.MatchString(a.buffer) && a.State == Disarmed {
+		m := alarmChangeRegexp.FindStringSubmatch(a.buffer)
 		firstCode := m[1]
 		if firstCode != a.Code {
 			a.Logger("The entered code %v was not correct", firstCode)
@@ -129,7 +135,7 @@ func (a *Alarm) executeCommand() {
 		a.HighBeep()
 		return
 	}
-	if strings.HasPrefix(a.Buffer, "D"+a.Code+"#") {
+	if strings.HasPrefix(a.buffer, "D"+a.Code+"#") {
 		a.Logger("Disarming")
 		a.Disarm()
 		return
@@ -148,15 +154,30 @@ func (a *Alarm) Disarm() {
 	a.cancellations = nil
 
 	// Stop the alarm.
-	a.State = Disarmed
 	a.StopAlarm()
-	a.Logger("Alarm stopped")
+	a.State = Disarmed
+	a.Logger("Alarm disarmed")
+	a.Display = "disa"
+	go a.clearDisplayAfter(time.Second * 5)
 }
 
 // Arm the alarm.
 func (a *Alarm) Arm() {
-	a.Logger("Armed")
 	a.State = Armed
+	a.Logger("Armed")
+	a.Display = "Armd"
+	go a.clearDisplayAfter(time.Second * 5)
+}
+
+func (a *Alarm) clearDisplayAfter(d time.Duration) {
+	ctx, cancel := context.WithCancel(context.Background())
+	a.cancellations = append(a.cancellations, cancel)
+	select {
+	case <-time.After(d):
+		a.Display = ""
+	case <-ctx.Done():
+		return
+	}
 }
 
 // Arming starts the arming process.
@@ -200,14 +221,15 @@ func (a *Alarm) Triggering() {
 func (a *Alarm) Trigger() {
 	a.Logger("Alarm triggered")
 	a.State = Triggered
+	a.Display = "Alrm"
 	a.StartAlarm()
 }
 
 func (a *Alarm) backspace() {
-	if len(a.Buffer) == 0 {
+	if len(a.buffer) == 0 {
 		return
 	}
-	a.Buffer = a.Buffer[:len(a.Buffer)-1]
+	a.buffer = a.buffer[:len(a.buffer)-1]
 }
 
 var digits = []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"}

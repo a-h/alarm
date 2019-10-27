@@ -115,10 +115,10 @@ func main() {
 		shouldNotify := *notifyFlag != ""
 		for isOpen := range openNotifications {
 			if !shouldNotify {
-				log.Printf("Skipping notification, because notify flag was not set: %v", isOpen)
+				log.Printf("Skipping notification, because notify flag was not set: %v", openOrClosed(isOpen))
 				continue
 			}
-			log.Printf("Sending door open notification: %v", isOpen)
+			log.Printf("Sending door open notification: %v", openOrClosed(isOpen))
 			err := dsu(isOpen)
 			if err != nil {
 				log.Printf("Error posting to door status: %v", err)
@@ -128,6 +128,7 @@ func main() {
 		}
 	}()
 
+	displaying := a.Display
 exit:
 	for {
 		select {
@@ -146,23 +147,39 @@ exit:
 				a.SetDoorIsOpen(doorState == rpio.High)
 				// Send a notification to the queue.
 				if sw, _ := netSw(); sw == rpio.Low {
-					log.Printf("Internet switch on, sending notification.")
+					log.Printf("Internet switch ON, sending notification.")
 					openNotifications <- doorState == rpio.High
 				} else {
 					log.Printf("Internet switch OFF, skipping notification.")
 				}
 			}
+
 			// Update the display.
-			if len(a.Buffer) > 4 {
-				disp.Update(a.Buffer[len(a.Buffer)-4:])
-			} else {
-				disp.Update(a.Buffer)
+			toDisplay := firstFourCharacters(a.Display)
+			if displaying != toDisplay {
+				log.Printf("Updating screen! %s", toDisplay)
+				displaying = toDisplay
 			}
+			disp.Update(displaying)
 			disp.Render()
 		}
 	}
 	close(openNotifications)
 	log.Printf("Shutdown complete")
+}
+
+func firstFourCharacters(s string) string {
+	if len(s) > 4 {
+		return s[len(s)-4:]
+	}
+	return s
+}
+
+func openOrClosed(isOpen bool) string {
+	if isOpen {
+		return "open"
+	}
+	return "closed"
 }
 
 type alarmSounder struct {
