@@ -7,8 +7,6 @@ provider:
   runtime: go1.x
   stage: dev
   region: eu-west-2
-  apiKeys:
-    - iftt_key_name
   iamRoleStatements:
     - Effect: "Allow"
       Action:
@@ -21,6 +19,7 @@ provider:
   environment:
     IOT_ENDPOINT: https://a3rmn7yfsg6nhl-ats.iot.eu-west-2.amazonaws.com
     IOT_THINGNAME: alarm
+    API_KEY: ${file(config.${self:provider.stage}.json):API_KEY}
 
 package:
  exclude:
@@ -35,8 +34,6 @@ functions:
       - http:
           path: /
           method: ANY
-          private: true
       - http:
           path: /{ANY+}
           method: ANY
-          private: true

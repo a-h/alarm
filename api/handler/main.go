@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path"
 
 	"github.com/a-h/alarm"
 	"github.com/akrylysov/algnhsa"
@@ -30,6 +31,13 @@ type status struct {
 }
 
 func handle(w http.ResponseWriter, r *http.Request) {
+	_, f := path.Split(r.URL.Path)
+	if os.Getenv("API_KEY") != f {
+		log.Printf("invalid API key: %q", f)
+		http.Error(w, "invalid API key", http.StatusUnauthorized)
+		return
+	}
+
 	// Decode request.
 	var update iotResponse
 	d := json.NewDecoder(r.Body)

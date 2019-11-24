@@ -4,3 +4,4 @@ cmd/*.crt
 cmd/*.key
 api/.serverless
 api/bin
+api/config.dev.json
