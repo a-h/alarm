@@ -26,7 +26,6 @@ type iotResponseState struct {
 }
 
 type status struct {
-	DoorIsOpen bool        `json:"doorIsOpen"`
 	AlarmState alarm.State `json:"alarmState"`
 }
 
