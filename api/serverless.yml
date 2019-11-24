@@ -1,0 +1,42 @@
+service: alarm-api
+
+frameworkVersion: ">=1.28.0 <2.0.0"
+
+provider:
+  name: aws
+  runtime: go1.x
+  stage: dev
+  region: eu-west-2
+  apiKeys:
+    - iftt_key_name
+  iamRoleStatements:
+    - Effect: "Allow"
+      Action:
+        - "iot:UpdateThingShadow"
+      Resource: "arn:aws:iot:eu-west-2:*:thing/alarm"
+    - Effect: "Allow"
+      Action:
+        - "iot:Connect"
+      Resource: "*"
+  environment:
+    IOT_ENDPOINT: https://a3rmn7yfsg6nhl-ats.iot.eu-west-2.amazonaws.com
+    IOT_THINGNAME: alarm
+
+package:
+ exclude:
+   - ./**
+ include:
+   - ./bin/**
+
+functions:
+  alarm-api:
+    handler: bin/handler
+    events:
+      - http:
+          path: /
+          method: ANY
+          private: true
+      - http:
+          path: /{ANY+}
+          method: ANY
+          private: true

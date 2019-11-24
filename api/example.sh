@@ -1,0 +1,1 @@
+curl -H "x-api-key: YOUR_KEY" -d '{ "doorIsOpen": false, "alarmState": 1 }' https://fwdzkyk2mc.execute-api.eu-west-2.amazonaws.com/dev

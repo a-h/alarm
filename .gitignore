@@ -2,3 +2,5 @@ cmd/cmd
 switchtest/switchtest
 cmd/*.crt
 cmd/*.key
+api/.serverless
+api/bin
