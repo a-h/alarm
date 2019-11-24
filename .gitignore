@@ -1,2 +1,4 @@
 cmd/cmd 
 switchtest/switchtest
+cmd/*.crt
+cmd/*.key

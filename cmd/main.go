@@ -3,9 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
+	"os/user"
 	"sync"
 	"syscall"
 	"time"
@@ -20,15 +22,31 @@ import (
 	"github.com/stianeikeland/go-rpio"
 )
 
-var notifyFlag = flag.String("notify", "", "Set a URL to notify")
+var notifyFlag = flag.String("notify", "", "Set a URL to notify, e.g. tls://a3rmn7yfsg6nhl-ats.iot.eu-west-2.amazonaws.com:8883")
+var certificatePEMFlag = flag.String("certificatePEM", "", "The certificate to use with AWS IoT")
+var privatePEMFlag = flag.String("privatePEM", "", "The key to use with AWS IoT")
 
 func main() {
 	flag.Parse()
+	if *notifyFlag == "" || *certificatePEMFlag == "" || *privatePEMFlag == "" {
+		flag.PrintDefaults()
+		return
+	}
+
+	var err error
+	var u *user.User
+	u, err = user.Current()
+	if err != nil {
+		log.Fatalf("Couldn't check if user is running as root: %v", err)
+	}
+	if u.Uid != "0" {
+		log.Fatalf("The buzzer requires that the app is ran as root in order to use the PWM feature.")
+	}
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
-	err := rpio.Open()
+	err = rpio.Open()
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 		os.Exit(1)
@@ -97,37 +115,33 @@ func main() {
 	// Configure logging.
 	a.Logger = log.Printf
 
-	// Configure whether to send events to the Internet.
-	netSw := Debounce(rpio.Pin(2))
-
 	// Configure the reed switch.
 	s := Debounce(rpio.Pin(21))
 	doorState, _ := s()
 	log.Printf("Door initially open: %v", doorState == rpio.High)
 	a.SetDoorIsOpen(doorState == rpio.High)
 
-	// Create a channel for the notifications to go to.
-	eventNotifications := make(chan doorstatus.Event, 10)
-	// Send a notification to the queue.
-	eventNotifications <- doorstatus.EventAlarmStarted
-	eventNotifications <- openOrClosedEvent(doorState == rpio.High)
-	go func() {
-		dsu := doorstatus.NewUpdater(*notifyFlag)
-		shouldNotify := *notifyFlag != ""
-		for e := range eventNotifications {
-			if !shouldNotify {
-				log.Printf("Skipping notification, because notify flag was not set: %v", e)
-				continue
-			}
-			log.Printf("Sending notification: %v", e)
-			err := dsu(e)
-			if err != nil {
-				log.Printf("Error posting status: %v", err)
-				continue
-			}
-			log.Print("Notification sent OK.")
-		}
-	}()
+	// Create the IoT connection.
+	certificatePEM, err := ioutil.ReadFile(*certificatePEMFlag)
+	if err != nil {
+		log.Fatalf("failed to read certificate file %s: %v", *certificatePEMFlag, err)
+	}
+	privatePEM, err := ioutil.ReadFile(*privatePEMFlag)
+	if err != nil {
+		log.Fatalf("failed to read private key file %s: %v", *privatePEMFlag, err)
+	}
+	subscription := make(chan alarm.State, 10)
+	update, closer, err := doorstatus.New("alarm", []byte(amazonRootCA1), certificatePEM, privatePEM, *notifyFlag, subscription)
+	if err != nil {
+		log.Fatalf("failed to connect to IoT: %v", err)
+	}
+
+	// Send an initial status to IoT.
+	log.Printf("Setting inital status")
+	update <- doorstatus.Status{
+		DoorIsOpen: doorState == rpio.High,
+		AlarmState: a.State,
+	}
 
 	displaying := a.Display
 	alarmState := a.State
@@ -138,6 +152,20 @@ exit:
 		case sig := <-sigs:
 			log.Printf("Shutdown signal received; %v", sig)
 			break exit
+		case state := <-subscription:
+			log.Printf("Remote update received: %v", alarm.StateNames[state])
+			switch state {
+			case alarm.Armed:
+				a.Arm()
+			case alarm.Arming:
+				a.Arming()
+			case alarm.Disarmed:
+				a.Disarm()
+			case alarm.Triggered:
+				a.Trigger()
+			case alarm.Triggering:
+				a.Triggering()
+			}
 		default:
 			if keys, ok := pad.Read(); ok {
 				for _, k := range keys {
@@ -145,25 +173,29 @@ exit:
 					a.KeyPressed(k)
 				}
 			}
-			if doorState, updated := s(); updated {
-				doorIsOpen := doorState == rpio.High
-				log.Printf("Door open: %v", doorIsOpen)
-				a.SetDoorIsOpen(doorIsOpen)
-				// Send a notification to the queue.
-				if sw, _ := netSw(); sw == rpio.Low {
-					log.Printf("Internet switch ON, sending notification.")
-					eventNotifications <- openOrClosedEvent(doorIsOpen)
-				} else {
-					log.Printf("Internet switch OFF, skipping notification.")
-				}
+
+			var notificationRequired bool
+
+			// If the door state has changed, send a notification.
+			var doorStateUpdated bool
+			if doorState, doorStateUpdated = s(); doorStateUpdated {
+				log.Printf("Door open: %v", doorState == rpio.High)
+				a.SetDoorIsOpen(doorState == rpio.High)
+				notificationRequired = true
 			}
 
-			// If the state has changed, send a notification.
+			// If the alarm state has changed, send a notification.
 			if alarmState != a.State {
-				if e, ok := stateToEvent[a.State]; ok {
-					eventNotifications <- e
-				}
+				notificationRequired = true
 				alarmState = a.State
+			}
+
+			if notificationRequired {
+				log.Printf("Updating status")
+				update <- doorstatus.Status{
+					DoorIsOpen: doorState == rpio.High,
+					AlarmState: a.State,
+				}
 			}
 
 			// Update the display.
@@ -176,7 +208,8 @@ exit:
 			disp.Render()
 		}
 	}
-	close(eventNotifications)
+	close(update)
+	closer()
 	log.Printf("Shutdown complete")
 }
 
@@ -185,19 +218,6 @@ func firstFourCharacters(s string) string {
 		return s[len(s)-4:]
 	}
 	return s
-}
-
-var stateToEvent = map[alarm.State]doorstatus.Event{
-	alarm.Armed:     doorstatus.EventAlarmArmed,
-	alarm.Disarmed:  doorstatus.EventAlarmDisarmed,
-	alarm.Triggered: doorstatus.EventAlarmTriggered,
-}
-
-func openOrClosedEvent(isOpen bool) doorstatus.Event {
-	if isOpen {
-		return doorstatus.EventDoorOpened
-	}
-	return doorstatus.EventDoorClosed
 }
 
 type alarmSounder struct {

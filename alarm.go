@@ -25,6 +25,15 @@ const (
 	Triggered
 )
 
+// StateNames contains the names of the various states.
+var StateNames = map[State]string{
+	Disarmed:   "Disarmed",
+	Arming:     "Arming",
+	Armed:      "Armed",
+	Triggering: "Triggering",
+	Triggered:  "Triggered",
+}
+
 // New creates a new Alarm.
 func New(code string) *Alarm {
 	a := &Alarm{
