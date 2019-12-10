@@ -166,7 +166,6 @@ func (a *Alarm) Disarm() {
 	a.StopAlarm()
 	a.State = Disarmed
 	a.Logger("Alarm disarmed")
-	a.Display = "disa"
 	go a.clearDisplayAfter(time.Second * 5)
 }
 
@@ -174,7 +173,6 @@ func (a *Alarm) Disarm() {
 func (a *Alarm) Arm() {
 	a.State = Armed
 	a.Logger("Armed")
-	a.Display = "Armd"
 	go a.clearDisplayAfter(time.Second * 5)
 }
 
