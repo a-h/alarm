@@ -62,9 +62,6 @@ func New(code string) *Alarm {
 				time.Sleep(time.Millisecond * 75)
 				a.HighBeep()				
 				time.Sleep(time.Millisecond * 500)
-				a.LowBeep()
-				a.MediumBeep()
-				a.HighBeep()
 			}
 			if i == 2 {
 				a.HighBeep()
@@ -120,6 +117,10 @@ func New(code string) *Alarm {
 			a.Display = fmt.Sprintf("%d", i)
 			time.Sleep(time.Second)
 			if i == 1 {
+				a.Display = "0"
+				a.LowBeep()
+				a.MediumBeep()
+				a.HighBeep()
 				a.Display = ""
 				}
 		}
