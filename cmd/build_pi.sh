@@ -1,6 +1,6 @@
 GOOS=linux GOARCH=arm GOARM=5 go build
-scp ./cmd pi@192.168.0.45:/home/pi/alarm
-scp ./*.pem* pi@192.168.0.45:/home/pi/
+scp ./cmd pi@housealarmpi:/home/pi/alarm
+scp ./*.pem* pi@housealarmpi:/home/pi/
 
 # To install...
 # Copy the certificates and binary to the local bin directory.
