@@ -85,7 +85,7 @@ func main() {
 	disp := segment.NewFourDigitSevenSegmentDisplay(pD1, pa, pf, pD2, pD3, pb, pe, pd, pdp, pc, pg, pD4)
 
 	log.Printf("Creating alarm...")
-	a := alarm.New("0000")
+	a := alarm.New("0654")
 
 	// Setup the buzzer.
 	log.Printf("Setting up buzzer...")
