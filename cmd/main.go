@@ -111,14 +111,16 @@ func main() {
 
 	// Create the IoT connection.
 	setArmingFromHomeKit := make(chan bool, 10)
-	updateArmedFromDevice, closer, err := doorstatus.New(setArmingFromHomeKit)
+	updateArmedFromDevice, updateDoorIsOpenFromDevice, closer, err := doorstatus.New(setArmingFromHomeKit)
 	if err != nil {
 		log.Fatalf("failed to connect to HomeKit: %v", err)
 	}
 
 	// Send an initial status to IoT.
-	log.Printf("Setting inital status")
+	log.Printf("Setting initial HomeKit status")
 	updateArmedFromDevice <- a.State != alarm.Disarmed
+	updateDoorIsOpenFromDevice <- doorState == rpio.High
+	log.Printf("Set initial HomeKit status complete")
 
 	displaying := a.Display
 	alarmState := a.State
@@ -148,6 +150,7 @@ exit:
 			if doorState, doorStateUpdated = s(); doorStateUpdated {
 				log.Printf("Door open: %v", doorState == rpio.High)
 				a.SetDoorIsOpen(doorState == rpio.High)
+				updateDoorIsOpenFromDevice <- doorState == rpio.High
 			}
 
 			// If the alarm state has changed, send a notification.
