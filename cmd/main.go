@@ -1,9 +1,7 @@
 package main
 
 import (
-	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
@@ -22,17 +20,7 @@ import (
 	"github.com/stianeikeland/go-rpio"
 )
 
-var notifyFlag = flag.String("notify", "", "Set a URL to notify, e.g. tls://a3rmn7yfsg6nhl-ats.iot.eu-west-2.amazonaws.com:8883")
-var certificatePEMFlag = flag.String("certificatePEM", "", "The certificate to use with AWS IoT")
-var privatePEMFlag = flag.String("privatePEM", "", "The key to use with AWS IoT")
-
 func main() {
-	flag.Parse()
-	if *notifyFlag == "" || *certificatePEMFlag == "" || *privatePEMFlag == "" {
-		flag.PrintDefaults()
-		return
-	}
-
 	var err error
 	var u *user.User
 	u, err = user.Current()
@@ -122,26 +110,15 @@ func main() {
 	a.SetDoorIsOpen(doorState == rpio.High)
 
 	// Create the IoT connection.
-	certificatePEM, err := ioutil.ReadFile(*certificatePEMFlag)
+	setArmingFromHomeKit := make(chan bool, 10)
+	updateArmedFromDevice, closer, err := doorstatus.New(setArmingFromHomeKit)
 	if err != nil {
-		log.Fatalf("failed to read certificate file %s: %v", *certificatePEMFlag, err)
-	}
-	privatePEM, err := ioutil.ReadFile(*privatePEMFlag)
-	if err != nil {
-		log.Fatalf("failed to read private key file %s: %v", *privatePEMFlag, err)
-	}
-	subscription := make(chan alarm.State, 10)
-	update, closer, err := doorstatus.New("alarm", []byte(amazonRootCA1), certificatePEM, privatePEM, *notifyFlag, subscription)
-	if err != nil {
-		log.Fatalf("failed to connect to IoT: %v", err)
+		log.Fatalf("failed to connect to HomeKit: %v", err)
 	}
 
 	// Send an initial status to IoT.
 	log.Printf("Setting inital status")
-	update <- doorstatus.Status{
-		DoorIsOpen: doorState == rpio.High,
-		AlarmState: a.State,
-	}
+	updateArmedFromDevice <- a.State != alarm.Disarmed
 
 	displaying := a.Display
 	alarmState := a.State
@@ -152,19 +129,11 @@ exit:
 		case sig := <-sigs:
 			log.Printf("Shutdown signal received; %v", sig)
 			break exit
-		case state := <-subscription:
-			log.Printf("Remote update received: %v", alarm.StateNames[state])
-			switch state {
-			case alarm.Armed:
-				a.Arm()
-			case alarm.Arming:
+		case isArming := <-setArmingFromHomeKit:
+			if isArming {
 				a.Arming()
-			case alarm.Disarmed:
+			} else {
 				a.Disarm()
-			case alarm.Triggered:
-				a.Trigger()
-			case alarm.Triggering:
-				a.Triggering()
 			}
 		default:
 			if keys, ok := pad.Read(); ok {
@@ -174,28 +143,23 @@ exit:
 				}
 			}
 
-			var notificationRequired bool
-
 			// If the door state has changed, send a notification.
 			var doorStateUpdated bool
 			if doorState, doorStateUpdated = s(); doorStateUpdated {
 				log.Printf("Door open: %v", doorState == rpio.High)
 				a.SetDoorIsOpen(doorState == rpio.High)
-				notificationRequired = true
 			}
 
 			// If the alarm state has changed, send a notification.
+			var alarmStateChanged bool
 			if alarmState != a.State {
-				notificationRequired = true
+				alarmStateChanged = true
 				alarmState = a.State
 			}
 
-			if notificationRequired {
+			if alarmStateChanged && (alarmState == alarm.Arming || alarmState == alarm.Armed || alarmState == alarm.Disarmed) {
 				log.Printf("Updating status")
-				update <- doorstatus.Status{
-					DoorIsOpen: doorState == rpio.High,
-					AlarmState: a.State,
-				}
+				updateArmedFromDevice <- alarmState == alarm.Arming || alarmState == alarm.Armed
 			}
 
 			// Update the display.
@@ -208,7 +172,7 @@ exit:
 			disp.Render()
 		}
 	}
-	close(update)
+	close(updateArmedFromDevice)
 	closer()
 	log.Printf("Shutdown complete")
 }
