@@ -60,7 +60,7 @@ func New(code string) *Alarm {
 				time.Sleep(time.Millisecond * 75)
 				a.HighBeep()
 				time.Sleep(time.Millisecond * 75)
-				a.HighBeep()				
+				a.HighBeep()
 				time.Sleep(time.Millisecond * 500)
 			}
 			if i == 2 {
@@ -113,7 +113,7 @@ func New(code string) *Alarm {
 			}
 			if i == 10 {
 				a.LowBeep()
-			}		
+			}
 			a.Display = fmt.Sprintf("%d", i)
 			time.Sleep(time.Second)
 			if i == 1 {
@@ -122,7 +122,7 @@ func New(code string) *Alarm {
 				a.MediumBeep()
 				a.HighBeep()
 				a.Display = ""
-				}
+			}
 		}
 	}
 	return a
@@ -235,6 +235,9 @@ func (a *Alarm) Disarm() {
 	a.StopAlarm()
 	a.State = Disarmed
 	a.Logger("Alarm disarmed")
+	a.LowBeep()
+	a.MediumBeep()
+	a.HighBeep()
 	go a.clearDisplayAfter(time.Second * 5)
 }
 
