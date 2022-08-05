@@ -10,8 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/a-h/alarm/doorstatus"
-
+	"github.com/a-h/alarm/iot"
 	"github.com/a-h/segment"
 
 	"github.com/a-h/alarm"
@@ -110,17 +109,17 @@ func main() {
 	a.SetDoorIsOpen(doorState == rpio.High)
 
 	// Create the IoT connection.
-	setArmingFromHomeKit := make(chan bool, 10)
-	updateArmedFromDevice, updateDoorIsOpenFromDevice, closer, err := doorstatus.New(setArmingFromHomeKit)
+	controlAlarmFromIoT := make(chan bool, 10)
+	updateStateFromDevice, updateDoorIsOpenFromDevice, closer, err := iot.New(controlAlarmFromIoT, &a.Code)
 	if err != nil {
-		log.Fatalf("failed to connect to HomeKit: %v", err)
+		log.Fatalf("failed to connect to IoT: %v", err)
 	}
 
 	// Send an initial status to IoT.
-	log.Printf("Setting initial HomeKit status")
-	updateArmedFromDevice <- a.State != alarm.Disarmed
+	log.Printf("Setting initial IoT status")
+	updateStateFromDevice <- a.State
 	updateDoorIsOpenFromDevice <- doorState == rpio.High
-	log.Printf("Set initial HomeKit status complete")
+	log.Printf("Set initial IoT status complete")
 
 	displaying := a.Display
 	alarmState := a.State
@@ -131,7 +130,7 @@ exit:
 		case sig := <-sigs:
 			log.Printf("Shutdown signal received; %v", sig)
 			break exit
-		case isArming := <-setArmingFromHomeKit:
+		case isArming := <-controlAlarmFromIoT:
 			if isArming {
 				a.Arming()
 			} else {
@@ -162,7 +161,7 @@ exit:
 
 			if alarmStateChanged && (alarmState == alarm.Arming || alarmState == alarm.Armed || alarmState == alarm.Disarmed) {
 				log.Printf("Updating status")
-				updateArmedFromDevice <- alarmState == alarm.Arming || alarmState == alarm.Armed
+				updateStateFromDevice <- a.State
 			}
 
 			// Update the display.
@@ -175,7 +174,7 @@ exit:
 			disp.Render()
 		}
 	}
-	close(updateArmedFromDevice)
+	close(updateStateFromDevice)
 	closer()
 	log.Printf("Shutdown complete")
 }

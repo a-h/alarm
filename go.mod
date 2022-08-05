@@ -12,6 +12,7 @@ require (
 	github.com/brutella/hc v1.2.3
 	github.com/cweill/gotests v1.6.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/eclipse/paho.mqtt.golang v1.4.1 // indirect
 	github.com/fatih/gomodifytags v1.13.0 // indirect
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/lukehoban/go-outline v0.0.0-20161011150102-e78556874252 // indirect

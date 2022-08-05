@@ -1,7 +1,3 @@
-cmd/cmd 
-switchtest/switchtest
-cmd/*.crt
-cmd/*.key
-api/.serverless
-api/bin
-api/config.dev.json
+# Build output file.
+main 
+iot/creds.json

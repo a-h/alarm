@@ -3,8 +3,6 @@ package alarm
 import (
 	"context"
 	"fmt"
-	"net/http"
-	"net/http/httputil"
 	"regexp"
 	"strings"
 	"sync"
@@ -232,7 +230,6 @@ func (a *Alarm) Disarm() {
 		cancel()
 	}
 	a.cancellations = nil
-
 	// Stop the alarm.
 	a.StopAlarm()
 	a.State = Disarmed
@@ -240,17 +237,6 @@ func (a *Alarm) Disarm() {
 	a.LowBeep()
 	a.MediumBeep()
 	a.HighBeep()
-	res, err := http.Get("http://192.168.155.211/4/off")
-	if err != nil {
-		a.Logger("error: %v", err)
-		return
-	}
-	dumped, err := httputil.DumpResponse(res, true)
-	if err != nil {
-		a.Logger("dump response error: %v", err)
-		return
-	}
-	a.Logger("response: " + string(dumped))
 	go a.clearDisplayAfter(time.Second * 5)
 }
 
@@ -314,17 +300,6 @@ func (a *Alarm) Trigger() {
 	a.Logger("Alarm triggered")
 	a.State = Triggered
 	a.StartAlarm()
-	res, err := http.Get("http://192.168.155.211/4/on")
-	if err != nil {
-		a.Logger("error: %v", err)
-		return
-	}
-	dumped, err := httputil.DumpResponse(res, true)
-	if err != nil {
-		a.Logger("dump response error: %v", err)
-		return
-	}
-	a.Logger("response: " + string(dumped))
 }
 
 func (a *Alarm) backspace() {
