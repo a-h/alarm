@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"time"
 
 	"github.com/a-h/alarm"
 	"github.com/brutella/hc/log"
@@ -63,35 +64,31 @@ func New(controlAlarmFromIoT chan<- bool, code *string) (updateStateFromDevice c
 	subscribe(client, "home-assistant/alarm/control", 1)
 
 	// Publish the availability topic.
-	publish(client, "home-assistant/alarm/availability", 1, "online", false)
-	publish(client, "home-assistant/door/availability", 1, "online", false)
+	publishAvailable(client)
+
+	// Every 30 seconds, publish the state, even if it hasn't changed.
+	go func() {
+		for {
+			isOpen = <-updateDoorIsOpenFromDevice
+			deviceStatus := <-updateStateFromDevice
+			log.Info.Printf("Setting door value in MQTT, hasn't updated in over 30 seconds: %v", isOpen)
+			publishDoor(client, isOpen)
+			log.Info.Printf("Setting alarm value in MQTT, hasn't updated in over 30 seconds: %v", deviceStatus)
+			publishAlarm(client, deviceStatus)
+			log.Info.Printf("Setting available in MQTT, hasn't updated in over 30 seconds")
+			publishAvailable(client)
+			time.Sleep(30 * time.Second)
+		}
+	}()
 
 	go func() {
 		for {
 			select {
 			case deviceStatus := <-updateStateFromDevice:
-				log.Info.Printf("Setting alarm value in MQTT: %v", deviceStatus)
-				switch deviceStatus {
-				case alarm.Disarmed:
-					publish(client, "home-assistant/alarm/contact", 1, "disarmed", true)
-				case alarm.Armed:
-					publish(client, "home-assistant/alarm/contact", 1, "armed_home", true)
-				case alarm.Triggering:
-					publish(client, "home-assistant/alarm/contact", 1, "pending", true)
-				case alarm.Triggered:
-					publish(client, "home-assistant/alarm/contact", 1, "triggered", true)
-				case alarm.Arming:
-					publish(client, "home-assistant/alarm/contact", 1, "arming", true)
-				}
+				publishAlarm(client, deviceStatus)
 			case isOpen = <-updateDoorIsOpenFromDevice:
-				log.Info.Printf("Setting door value in MQTT: %v", isOpen)
-				if isOpen {
-					publish(client, "home-assistant/door/contact", 0, "payload_on", true)
-				} else {
-					publish(client, "home-assistant/door/contact", 0, "payload_off", true)
-				}
+				publishDoor(client, isOpen)
 			}
-
 		}
 	}()
 	return
@@ -106,4 +103,36 @@ func subscribe(client mqtt.Client, topic string, qos byte) {
 	token := client.Subscribe(topic, qos, nil)
 	token.Wait()
 	log.Info.Printf("Subscribed to topic %s", topic)
+}
+
+func publishDoor(client mqtt.Client, isOpen bool) {
+	log.Info.Printf("Setting door value in MQTT: %v", isOpen)
+	if isOpen {
+		publish(client, "home-assistant/door/contact", 0, "payload_on", true)
+	} else {
+		publish(client, "home-assistant/door/contact", 0, "payload_off", true)
+	}
+}
+
+func publishAlarm(client mqtt.Client, deviceStatus alarm.State) {
+	log.Info.Printf("Setting alarm value in MQTT: %v", deviceStatus)
+	switch deviceStatus {
+	case alarm.Disarmed:
+		publish(client, "home-assistant/alarm/contact", 1, "disarmed", true)
+	case alarm.Armed:
+		publish(client, "home-assistant/alarm/contact", 1, "armed_home", true)
+	case alarm.Triggering:
+		log.Info.Printf("Alarm about to trigger, sent to MQTT")
+		publish(client, "home-assistant/alarm/contact", 1, "pending", true)
+	case alarm.Triggered:
+		log.Info.Printf("Alarm triggered, sent to MQTT")
+		publish(client, "home-assistant/alarm/contact", 1, "triggered", true)
+	case alarm.Arming:
+		publish(client, "home-assistant/alarm/contact", 1, "arming", true)
+	}
+}
+
+func publishAvailable(client mqtt.Client) {
+	publish(client, "home-assistant/alarm/availability", 1, "online", false)
+	publish(client, "home-assistant/door/availability", 1, "online", false)
 }
