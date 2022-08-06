@@ -109,7 +109,7 @@ func main() {
 	a.SetDoorIsOpen(doorState == rpio.High)
 
 	// Create the IoT connection.
-	controlAlarmFromIoT := make(chan bool, 10)
+	controlAlarmFromIoT := make(chan alarm.State, 10)
 	updateStateFromDevice, updateDoorIsOpenFromDevice, closer, err := iot.New(controlAlarmFromIoT, &a.Code)
 	if err != nil {
 		log.Fatalf("failed to connect to IoT: %v", err)
@@ -130,11 +130,15 @@ exit:
 		case sig := <-sigs:
 			log.Printf("Shutdown signal received; %v", sig)
 			break exit
-		case isArming := <-controlAlarmFromIoT:
-			if isArming {
-				a.Arming()
-			} else {
+		case newStatusFromIoT := <-controlAlarmFromIoT:
+			log.Printf("Received control alarm from IoT: %v", newStatusFromIoT)
+			switch newStatusFromIoT {
+			case alarm.Disarmed:
 				a.Disarm()
+			case alarm.Arming:
+				a.Arming()
+			case alarm.Triggered:
+				a.Trigger()
 			}
 		default:
 			if keys, ok := pad.Read(); ok {
@@ -153,14 +157,8 @@ exit:
 			}
 
 			// If the alarm state has changed, send a notification.
-			var alarmStateChanged bool
 			if alarmState != a.State {
-				alarmStateChanged = true
 				alarmState = a.State
-			}
-
-			if alarmStateChanged && (alarmState == alarm.Arming || alarmState == alarm.Armed || alarmState == alarm.Disarmed) {
-				log.Printf("Updating status")
 				updateStateFromDevice <- a.State
 			}
 
