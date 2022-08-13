@@ -1,3 +1,4 @@
 # Build output file.
 main 
+# Secret Credentials
 iot/creds.json
