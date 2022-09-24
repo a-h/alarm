@@ -47,73 +47,11 @@ func New(code string) *Alarm {
 		Logger:     func(format string, v ...interface{}) {},
 	}
 	a.Timeout = func(ctx context.Context) {
-		for i := 10; i > 0; i-- {
+		for i := 30; i > 0; i-- {
 			if ctx.Err() == context.Canceled {
 				return
 			}
-			if i == 1 {
-				a.HighBeep()
-				time.Sleep(time.Millisecond * 75)
-				a.HighBeep()
-				time.Sleep(time.Millisecond * 75)
-				a.HighBeep()
-				time.Sleep(time.Millisecond * 75)
-				a.HighBeep()
-				time.Sleep(time.Millisecond * 75)
-				a.HighBeep()
-				time.Sleep(time.Millisecond * 500)
-			}
-			if i == 2 {
-				a.HighBeep()
-				time.Sleep(time.Millisecond * 75)
-				a.HighBeep()
-				time.Sleep(time.Millisecond * 75)
-				a.HighBeep()
-				time.Sleep(time.Millisecond * 75)
-				a.HighBeep()
-				time.Sleep(time.Millisecond * 75)
-				a.HighBeep()
-			}
-			if i == 3 {
-				a.HighBeep()
-				time.Sleep(time.Millisecond * 75)
-				a.HighBeep()
-				time.Sleep(time.Millisecond * 75)
-				a.HighBeep()
-				time.Sleep(time.Millisecond * 75)
-				a.HighBeep()
-				time.Sleep(time.Millisecond * 75)
-				a.HighBeep()
-			}
-			if i == 4 {
-				a.MediumBeep()
-				time.Sleep(time.Millisecond * 50)
-				a.MediumBeep()
-			}
-			if i == 5 {
-				a.MediumBeep()
-				time.Sleep(time.Millisecond * 50)
-				a.MediumBeep()
-			}
-			if i == 6 {
-				a.MediumBeep()
-				time.Sleep(time.Millisecond * 50)
-				a.MediumBeep()
-			}
-			if i == 7 {
-				a.LowBeep()
-				time.Sleep(time.Millisecond * 25)
-				a.LowBeep()
-			}
-			if i == 8 {
-				a.LowBeep()
-			}
-			if i == 9 {
-				a.LowBeep()
-			}
-			if i == 10 {
-				a.LowBeep()
-			}
+			a.LowBeep()
 			a.Display = fmt.Sprintf("%d", i)
 			time.Sleep(time.Second)
 			if i == 1 {
