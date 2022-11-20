@@ -139,7 +139,7 @@ func publishAlarm(client mqtt.Client, deviceStatus alarm.State) {
 	case alarm.Disarmed:
 		publish(client, "home-assistant/alarm/contact", 1, "disarmed", true)
 	case alarm.Armed:
-		publish(client, "home-assistant/alarm/contact", 1, "armed_home", true)
+		publish(client, "home-assistant/alarm/contact", 1, "armed_away", true)
 	case alarm.Triggering:
 		publish(client, "home-assistant/alarm/contact", 1, "pending", true)
 	case alarm.Triggered:
