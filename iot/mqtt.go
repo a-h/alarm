@@ -87,6 +87,11 @@ func New(controlAlarmFromIoT chan<- alarm.State, code *string) (updateStateFromD
 		for {
 			select {
 			case <-ticker.C:
+				log.Printf("Ticker: Restarting the MQTT connection.")
+				client.Disconnect(250) // allow 250ms for the disconnect to complete
+				if token := client.Connect(); token.Wait() && token.Error() != nil {
+					panic(token.Error())
+				}
 				log.Printf("Ticker: Publishing current state")
 				publishAvailable(client)
 				publishAlarm(client, deviceStatus)
