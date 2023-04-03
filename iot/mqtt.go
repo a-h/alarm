@@ -90,12 +90,15 @@ func New(controlAlarmFromIoT chan<- alarm.State, code *string) (updateStateFromD
 				log.Printf("Ticker: Restarting the MQTT connection.")
 				client.Disconnect(250) // allow 250ms for the disconnect to complete
 				if token := client.Connect(); token.Wait() && token.Error() != nil {
-					panic(token.Error())
+					log.Printf("Ticker: Error restarting MQTT: %s", token.Error())
 				}
 				log.Printf("Ticker: Publishing current state")
 				publishAvailable(client)
 				publishAlarm(client, deviceStatus)
 				publishDoor(client, isOpen)
+				log.Printf("Ticker: Re-subscribing to topics")
+				subscribe(client, "home-assistant/alarm/control", 1)
+				log.Printf("Ticker: Done")
 			case <-quit:
 				ticker.Stop()
 				return
@@ -155,6 +158,6 @@ func publishAlarm(client mqtt.Client, deviceStatus alarm.State) {
 }
 
 func publishAvailable(client mqtt.Client) {
-	publish(client, "home-assistant/alarm/availability", 1, "online", false)
-	publish(client, "home-assistant/door/availability", 1, "online", false)
+	publish(client, "home-assistant/alarm/availability", 1, "online", true)
+	publish(client, "home-assistant/door/availability", 1, "online", true)
 }
