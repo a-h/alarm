@@ -133,6 +133,8 @@ exit:
 		case newStatusFromIoT := <-controlAlarmFromIoT:
 			log.Printf("Received control alarm from IoT: %v", newStatusFromIoT)
 			switch newStatusFromIoT {
+			case alarm.Armed:
+				a.Arm()
 			case alarm.Disarmed:
 				a.Disarm()
 			case alarm.Arming:

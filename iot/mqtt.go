@@ -55,9 +55,9 @@ func New(controlAlarmFromIoT chan<- alarm.State, code *string) (updateStateFromD
 		if alarmMessage.Code == *code {
 			switch alarmMessage.Action {
 			case "ARM_HOME":
-				controlAlarmFromIoT <- alarm.Arming
+				controlAlarmFromIoT <- alarm.Armed
 			case "ARM_AWAY":
-				controlAlarmFromIoT <- alarm.Arming
+				controlAlarmFromIoT <- alarm.Armed
 			case "DISARM":
 				controlAlarmFromIoT <- alarm.Disarmed
 			case "TRIGGER":
